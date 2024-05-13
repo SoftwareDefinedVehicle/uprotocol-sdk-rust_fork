@@ -118,9 +118,7 @@ impl TryFrom<UMessage> for cloudevents::Event {
         let ctype = payload.format.enum_value_or_default();
         event.set_datacontenttype(ctype.to_media_type());
 
-        if payload.has_value() {
-            event.set_data_unchecked(payload.value().to_vec());
-        }
+        event.set_data_unchecked(payload.data.clone());
         if let Some(ttl) = attributes.ttl {
             event.set_extension("ttl", ExtensionValue::Integer(ttl as i64));
         }
@@ -351,11 +349,7 @@ impl From<cloudevents::Event> for ProtoCloudEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::up_core_api::uattributes::UAttributes;
-    use crate::up_core_api::uattributes::UMessageType;
-    use crate::up_core_api::upayload::{UPayload, UPayloadFormat};
-    use crate::uri::{UAuthority, UEntity, UResource, UUri};
-    use crate::uuid::UUIDBuilder;
+    use crate::{UAttributes, UMessageType, UPayload, UPayloadFormat, UUIDBuilder, UUri};
 
     use cloudevents::{Event, EventBuilder, EventBuilderV10};
     use protobuf::well_known_types::any::Any;
@@ -388,30 +382,15 @@ mod tests {
     fn build_message_formats_for_test() -> (UMessage, Event, ProtoCloudEvent) {
         // common parts
         let uri = UUri {
-            authority: Some(UAuthority {
-                name: Some("VCU.MY_CAR_VIN".into()),
-                ..Default::default()
-            })
-            .into(),
-            entity: Some(UEntity {
-                name: "body.access".into(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "door".to_string(),
-                instance: Some("front_left".into()),
-                message: Some("Door".into()),
-                ..Default::default()
-            })
-            .into(),
+            authority_name: "VCU.MY_CAR_VIN".to_string(),
+            ue_id: 0x8000,
+            ue_version_major: 0x01,
+            resource_id: 0x0001,
             ..Default::default()
         };
         let uuid = UUIDBuilder::build();
         let payload = UPayload {
-            data: Some(crate::up_core_api::upayload::upayload::Data::Value(
-                Any::default().value,
-            )),
+            data: Any::default().value,
             format: UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY.into(),
             ..Default::default()
         };

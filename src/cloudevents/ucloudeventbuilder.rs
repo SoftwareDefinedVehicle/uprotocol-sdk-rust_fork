@@ -421,23 +421,11 @@ mod tests {
     use cloudevents::{AttributesReader, Data, Event, EventBuilder, EventBuilderV10};
 
     use crate::cloudevents::UCloudEventUtils;
-    use crate::{UAuthority, UCode, UEntity, UPriority, UResource, UResourceBuilder, UUri};
+    use crate::{UCode, UPriority, UUri};
 
     #[test]
     fn test_create_base_cloud_event() {
-        let uri = UUri {
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "door".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            ..Default::default()
-        };
+        let uri = get_event_uuri();
 
         let source = uri.to_string();
         let proto_payload = pack_event_into_any(&build_proto_payload_for_test());
@@ -502,19 +490,7 @@ mod tests {
 
     #[test]
     fn test_create_base_cloud_event_without_attributes() {
-        let uri = UUri {
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "door".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            ..Default::default()
-        };
+        let uri = get_event_uuri();
         let source = uri.to_string();
         let proto_payload: Any = pack_event_into_any(&build_proto_payload_for_test());
         let ucloud_event_attributes = UCloudEventAttributes::default();
@@ -567,19 +543,7 @@ mod tests {
 
     #[test]
     fn test_create_publish_cloud_event() {
-        let uri = UUri {
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "door".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            ..Default::default()
-        };
+        let uri = get_event_uuri();
         let source = uri.to_string();
 
         // fake payload
@@ -638,38 +602,15 @@ mod tests {
     #[test]
     fn test_create_notification_cloud_event() {
         // source
-        let uri = UUri {
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "door".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            ..Default::default()
-        };
+        let uri = get_event_uuri();
         let source = uri.to_string();
 
         // sink
         let sink_uri = UUri {
-            authority: Some(UAuthority {
-                name: Some(String::from("com.gm.bo")),
-                ..Default::default()
-            })
-            .into(),
-            entity: Some(UEntity {
-                name: "petapp".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "OK".to_string(),
-                ..Default::default()
-            })
-            .into(),
+            authority_name: String::from("com.gm.bo"),
+            ue_id: 0x0000_4510,
+            ue_version_major: 0x02,
+            resource_id: 0x0001,
             ..Default::default()
         };
         let sink = sink_uri.to_string();
@@ -731,10 +672,10 @@ mod tests {
     #[test]
     fn test_create_request_cloud_event_from_local_use() {
         // Uri for the application requesting the RPC
-        let application_uri_for_rpc = build_uri_for_test();
+        let application_uri_for_rpc = get_rpc_response_uri();
 
         // service Method Uri
-        let service_method_uri = build_uri_for_test();
+        let service_method_uri = get_rpc_method_uri();
 
         // fake payload
         let proto_payload: Any = pack_event_into_any(&build_proto_payload_for_test());
@@ -791,30 +732,20 @@ mod tests {
     fn test_create_response_cloud_event_originating_from_local_use() {
         // Uri for the application requesting the RPC
         let rpc_uri = UUri {
-            entity: Some(UEntity {
-                name: "petapp".to_string(),
-                version_major: Some(1),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResourceBuilder::for_rpc_response()).into(),
+            authority_name: String::default(),
+            ue_id: 0x0000_23a0,
+            ue_version_major: 0x01,
+            resource_id: 0x0000,
             ..Default::default()
         };
         let application_uri_for_rpc = String::try_from(&rpc_uri).unwrap();
 
         // service Method Uri
         let method_uri = UUri {
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                version_major: Some(1),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResourceBuilder::for_rpc_request(
-                Some("UpdateDoor".into()),
-                None,
-            ))
-            .into(),
+            authority_name: String::default(),
+            ue_id: 0x0000_3b27,
+            ue_version_major: 0x01,
+            resource_id: 0x410b,
             ..Default::default()
         };
         let service_method_uri = String::try_from(&method_uri).unwrap();
@@ -840,15 +771,9 @@ mod tests {
 
         assert_eq!("1.0", cloud_event.specversion().to_string());
         assert!(!cloud_event.id().is_empty());
+        assert_eq!("/3B27/1/410B", cloud_event.source().to_string());
         assert_eq!(
-            "/body.access/1/rpc.UpdateDoor",
-            cloud_event.source().to_string()
-        );
-        assert!(cloud_event
-            .iter_extensions()
-            .any(|(name, _value)| name.contains("sink")));
-        assert_eq!(
-            "/petapp/1/rpc.response",
+            "/23A0/1/0",
             cloud_event.extension("sink").unwrap().to_string()
         );
         assert_eq!("res.v1", cloud_event.ty());
@@ -889,30 +814,20 @@ mod tests {
     fn test_create_a_failed_response_cloud_event_originating_from_local_use() {
         // Uri for the application requesting the RPC
         let rpc_uri = UUri {
-            entity: Some(UEntity {
-                name: "petapp".to_string(),
-                version_major: Some(1),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResourceBuilder::for_rpc_response()).into(),
+            authority_name: String::default(),
+            ue_id: 0x0000_23a0,
+            ue_version_major: 0x01,
+            resource_id: 0x0000,
             ..Default::default()
         };
         let application_uri_for_rpc = String::try_from(&rpc_uri).unwrap();
 
         // Service Method Uri
         let method_uri = UUri {
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                version_major: Some(1),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResourceBuilder::for_rpc_request(
-                Some("UpdateDoor".into()),
-                None,
-            ))
-            .into(),
+            authority_name: String::default(),
+            ue_id: 0x0000_3b27,
+            ue_version_major: 0x01,
+            resource_id: 0x410b,
             ..Default::default()
         };
         let service_method_uri = String::try_from(&method_uri).unwrap();
@@ -935,15 +850,9 @@ mod tests {
 
         assert_eq!("1.0", cloud_event.specversion().to_string());
         assert!(!cloud_event.id().is_empty());
+        assert_eq!("/3B27/1/410B", cloud_event.source().to_string());
         assert_eq!(
-            "/body.access/1/rpc.UpdateDoor",
-            cloud_event.source().to_string()
-        );
-        assert!(cloud_event
-            .iter_extensions()
-            .any(|(name, _value)| name.contains("sink")));
-        assert_eq!(
-            "/petapp/1/rpc.response",
+            "/23A0/1/0",
             cloud_event.extension("sink").unwrap().to_string()
         );
         assert_eq!("res.v1", cloud_event.ty());
@@ -980,10 +889,10 @@ mod tests {
     #[test]
     fn test_create_a_failed_response_cloud_event_originating_from_remote_use() {
         // Uri for the application requesting the RPC
-        let application_uri_for_rpc = build_uri_for_test();
+        let application_uri_for_rpc = get_rpc_response_uri();
 
         // Service Method Uri
-        let service_method_uri = build_uri_for_test();
+        let service_method_uri = get_rpc_method_uri();
 
         // Additional attributes
         let ucloud_event_attributes = UCloudEventAttributes {
@@ -1075,22 +984,35 @@ mod tests {
         }
     }
 
-    fn build_uri_for_test() -> String {
-        let uri = UUri {
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "door".to_string(),
-                instance: Some("front_left".to_string()),
-                message: Some("Door".to_string()),
-                ..Default::default()
-            })
-            .into(),
+    fn get_event_uuri() -> UUri {
+        UUri {
+            authority_name: String::default(),
+            ue_id: 0x0000_3b27,
+            ue_version_major: 0x01,
+            resource_id: 0xc471,
+            ..Default::default()
+        }
+    }
+
+    fn get_rpc_response_uri() -> String {
+        let uuri = UUri {
+            authority_name: String::default(),
+            ue_id: 0x0000_4045,
+            ue_version_major: 0x01,
+            resource_id: 0x0000,
             ..Default::default()
         };
-        String::try_from(&uri).unwrap()
+        String::try_from(&uuri).unwrap()
+    }
+
+    fn get_rpc_method_uri() -> String {
+        let uuri = UUri {
+            authority_name: String::default(),
+            ue_id: 0x0000_3b27,
+            ue_version_major: 0x01,
+            resource_id: 0x410b,
+            ..Default::default()
+        };
+        String::try_from(&uuri).unwrap()
     }
 }

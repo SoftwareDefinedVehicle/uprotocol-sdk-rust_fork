@@ -51,24 +51,16 @@ mod tests {
         UCloudEventUtils,
     };
     use crate::rpc::RpcMapper;
-    use crate::{UAuthority, UEntity, UMessageType, UPriority, UResource, UUri};
+    use crate::{UMessageType, UPriority, UUri};
 
     #[test]
     fn serialize_and_deserialize_cloud_event_to_protobuf() {
         // Build the source
         let uri = UUri {
-            authority: Some(UAuthority::default()).into(),
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "Door".to_string(),
-                instance: Some("front_left".to_string()),
-                ..Default::default()
-            })
-            .into(),
+            authority_name: String::default(),
+            ue_id: 0x0000_3b27,
+            ue_version_major: 0x01,
+            resource_id: 0xc471,
             ..Default::default()
         };
 
@@ -180,18 +172,10 @@ mod tests {
 
         // Source
         let uri = UUri {
-            authority: Some(UAuthority::default()).into(),
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "Door".to_string(),
-                instance: Some("front_left".to_string()),
-                ..Default::default()
-            })
-            .into(),
+            authority_name: String::default(),
+            ue_id: 0x0000_3b27,
+            ue_version_major: 0x01,
+            resource_id: 0xc471,
             ..Default::default()
         };
         let source = String::try_from(&uri).unwrap();

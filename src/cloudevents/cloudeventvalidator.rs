@@ -17,7 +17,7 @@ use std::str::FromStr;
 use cloudevents::{event::SpecVersion, AttributesReader, Event};
 
 use crate::cloudevents::UCloudEventUtils;
-use crate::{UMessageType, UResource, UUri, UriValidator};
+use crate::{UMessageType, UUri};
 
 use crate::cloudevents::CloudEventError;
 
@@ -116,29 +116,35 @@ pub trait CloudEventValidator: std::fmt::Display {
         if UCloudEventUtils::is_cloud_event_id(cloud_event) {
             Ok(())
         } else {
-            Err(CloudEventError::validation_error(format!(
-                "Invalid CloudEvent Id [{}], CloudEvent Id must be of type UUIDv8",
-                cloud_event.id()
-            )))
+            Err(CloudEventError::validation_error(
+                "CloudEvent ID must be a valid uProtocol UUID",
+            ))
         }
     }
 
-    /// Validates the source value of a `CloudEvent`.
+    /// Checks if a CloudEvent's source property contains an appropriate URI.
     ///
     /// # Arguments
     ///
     /// * `cloud_event` - The `CloudEvent` containing the source to validate.
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// Returns a `ValidationResult` containing a success or a failure with the error message.
+    /// Returns an error if the event's source property does not contain a URI that is appropriate for the particular type
+    /// of message being conveyed.
+    fn validate_source(&self, cloud_event: &Event) -> Result<(), CloudEventError>;
+
+    /// Checks if a CloudEvent's sink property contains an appropriate URI.
+    ///
+    /// # Arguments
+    ///
+    /// * `cloud_event` - The CloudEvent containing the sink to validate.
     ///
     /// # Errors
     ///
-    /// Returns a `CloudEventError::ValidationError` in the following cases:
-    /// - If the `source` attribute of the `cloud_event` is missing, empty, or does not meet specific validation criteria.
-    /// - If there are additional validation rules specific to the `source` attribute (such as format requirements, expected URI structure, etc.), and the `source` attribute of the `cloud_event` does not conform to these rules.
-    fn validate_source(&self, cloud_event: &Event) -> Result<(), CloudEventError>;
+    /// Returns an error if the event's sink property does not contain a URI that is appropriate for the particular type
+    /// of message being conveyed.
+    fn validate_sink(&self, cloud_event: &Event) -> Result<(), CloudEventError>;
 
     /// Validates the type attribute of a `CloudEvent`.
     ///
@@ -158,163 +164,76 @@ pub trait CloudEventValidator: std::fmt::Display {
     /// - If the `type` attribute of the `cloud_event` does not conform to specific validation rules or criteria set by the implementation.
     fn validate_type(&self, cloud_event: &Event) -> Result<(), CloudEventError>;
 
-    /// Validates the sink value of a `CloudEvent` in the default scenario where the sink attribute is optional.
-    ///
-    /// # Arguments
-    ///
-    /// * `cloud_event` - The `CloudEvent` containing the sink to validate.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `ValidationResult` containing a success or a failure with the error message.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `CloudEventError::ValidationError` in the following case:
-    ///
-    /// - If the sink URI extracted from the `cloud_event` fails the validation checks performed by `self.validate_entity_uri`.
-    fn validate_sink(&self, cloud_event: &Event) -> Result<(), CloudEventError> {
-        if let Some(sink) = UCloudEventUtils::get_sink(cloud_event) {
-            if let Ok(uri) = UUri::from_str(sink.as_str()) {
-                if let Err(e) = self.validate_entity_uri(&uri) {
-                    return Err(CloudEventError::validation_error(format!(
-                        "Invalid CloudEvent sink [{sink}] - {e}"
-                    )));
-                }
-            }
-        } else {
-            return Err(CloudEventError::validation_error(
-                "Invalid CloudEvent sink, sink must be an uri",
-            ));
-        }
-        Ok(())
-    }
-
-    /// Validates an `UriPart` for a `Software Entity`. This must have an authority in the case of
-    /// a microRemote URI and must also contain the name of the USE (Unified Software Entity).
+    /// Checks if a URI can be used as a source or sink of a CloudEvent.
     ///
     /// # Arguments
     ///
     /// * `uri` - The URI string to validate.
     ///
-    /// # Returns
-    ///
-    /// Returns a `ValidationResult` containing a success or a failure with the error message.
-    ///
     /// # Errors
     ///
-    /// Returns a `CloudEventError::ValidationError` in the following case:
-    ///
-    /// - If the `UUri` fails the validation checks performed by `UriValidator::validate`.
+    /// Returns an error if the URI contains any wildcards.
     fn validate_entity_uri(&self, uri: &UUri) -> Result<(), CloudEventError> {
-        UriValidator::validate(uri).map_err(|e| CloudEventError::validation_error(e.to_string()))
+        uri.verify_no_wildcards()
+            .map_err(|_e| CloudEventError::validation_error("URI must not contain wildcards"))
     }
 
-    /// Validates a `UriPart` that is to be used as a topic in publish scenarios for events such as
-    /// "publish", "file", and "notification".
+    /// Checks if a URI represents a topic address.
     ///
     /// # Arguments
     ///
-    /// * `uri` - The URI string (or part) to validate.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `ValidationResult` containing a success or a failure with the error message.
+    /// * `uri` - The URI string to validate.
     ///
     /// # Errors
     ///
-    /// Returns a `CloudEventError::ValidationError` in the following cases:
-    ///
-    /// - If the `UUri` fails the validation checks performed by `self.validate_entity_uri`. This indicates that the `UUri` does not meet the necessary criteria for an entity URI, which is a prerequisite for a valid topic URI.
-    /// - If the `UUri`'s `resource` part is either missing or has an empty `name`.
-    /// - If the `UUri`'s `resource` part does not contain message information (`message` field is `None`).
+    /// Returns an error if the URI cannot be used as the source of an event.
     fn validate_topic_uri(&self, uri: &UUri) -> Result<(), CloudEventError> {
         self.validate_entity_uri(uri)?;
-
-        let default = UResource::default();
-        let resource = uri.resource.as_ref().unwrap_or(&default);
-        if resource.name.trim().is_empty() {
-            return Err(CloudEventError::validation_error(
-                "UriPart is missing uResource name",
-            ));
+        if uri.is_event() {
+            Ok(())
+        } else {
+            Err(CloudEventError::validation_error(
+                "URI does not represent an event address",
+            ))
         }
-        if resource.message.is_none() {
-            return Err(CloudEventError::validation_error(
-                "UriPart is missing Message information",
-            ));
-        }
-
-        Ok(())
     }
 
-    /// Validates a `UriPart` that is meant to be used as the application response topic for RPC calls.
-    ///
-    /// Used in Request source values and Response sink values.
+    /// Checks if a URI represents an RPC response address.
     ///
     /// # Arguments
     ///
     /// * `uri` - The URI string (or part) to validate.
     ///
-    /// # Returns
-    ///
-    /// Returns a `ValidationResult` containing a success or a failure with the error message.
-    ///
     /// # Errors
     ///
-    /// Returns a `CloudEventError::ValidationError` in the following cases:
-    ///
-    /// - If the `UUri` fails the validation checks performed by `self.validate_entity_uri`.
-    /// - If the `UUri` does not correctly represent an RPC topic URI. Specifically, the error is returned if the `UUri`'s `resource` part does not match the expected "rpc.response" structure.
-    fn validate_rpc_topic_uri(&self, uri: &UUri) -> Result<(), CloudEventError> {
-        if let Err(e) = self.validate_entity_uri(uri) {
-            return Err(CloudEventError::validation_error(format!(
-                "Invalid RPC uri application response topic [{e}]"
-            )));
+    /// Returns an error if the URI cannot be used as the response address in an RPC.
+    fn validate_rpc_response_address(&self, uri: &UUri) -> Result<(), CloudEventError> {
+        self.validate_entity_uri(uri)?;
+        if uri.is_rpc_response() {
+            Ok(())
+        } else {
+            Err(CloudEventError::validation_error(
+                "Not an RPC response address",
+            ))
         }
-
-        if let Some(resource) = uri.resource.as_ref() {
-            if resource.name == "rpc"
-                && resource.instance.as_ref().is_some()
-                && resource.instance.as_ref().unwrap() == "response"
-            {
-                return Ok(());
-            }
-            return Err(CloudEventError::validation_error(
-                "Invalid RPC uri application response topic, UriPart is missing rpc.response",
-            ));
-        }
-        Ok(())
     }
 
-    /// Validates a `UriPart` that is intended to be used as an RPC method URI.
-    ///
-    /// This is typically used in Request sink values and Response source values.
+    /// Checks if a URI represents an RPC method.
     ///
     /// # Arguments
     ///
     /// * `uri` - The URI string (or part) to validate.
     ///
-    /// # Returns
-    ///
-    /// Returns a `ValidationResult` containing either a success or a failure with the accompanying error message.
-    ///
     /// # Errors
     ///
-    /// Returns a `CloudEventError::ValidationError` in the following cases:
-    ///
-    /// - If the `UUri` fails the validation checks performed by `self.validate_entity_uri`.
-    /// - If the `UUri` is not recognized as a valid RPC method URI according to the `UriValidator::is_rpc_method` check.
+    /// Returns an error if the URI cannot be used as the method to invoke in an RPC.
     fn validate_rpc_method(&self, uri: &UUri) -> Result<(), CloudEventError> {
-        if let Err(e) = self.validate_entity_uri(uri) {
-            return Err(CloudEventError::validation_error(format!(
-                "Invalid RPC method uri [{e}]"
-            )));
+        self.validate_entity_uri(uri)?;
+        if uri.is_rpc_method() {
+            Ok(())
+        } else {
+            Err(CloudEventError::validation_error("Not an RPC method URI"))
         }
-
-        if !UriValidator::is_rpc_method(uri) {
-            return Err(CloudEventError::validation_error("Invalid RPC method uri - UriPart should be the method to be called, or method from response"));
-        }
-        Ok(())
     }
 }
 
@@ -372,6 +291,16 @@ impl CloudEventValidator for PublishValidator {
             ));
         }
         Ok(())
+    }
+
+    fn validate_sink(&self, cloud_event: &Event) -> Result<(), CloudEventError> {
+        if UCloudEventUtils::get_sink(cloud_event).is_some() {
+            Err(CloudEventError::validation_error(
+                "Publish CloudEvent must not contain sink address",
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     fn validate_type(&self, cloud_event: &Event) -> Result<(), CloudEventError> {
@@ -442,7 +371,7 @@ impl CloudEventValidator for RequestValidator {
     fn validate_source(&self, cloud_event: &Event) -> Result<(), CloudEventError> {
         let source = cloud_event.source();
         if let Ok(uri) = UUri::from_str(source.as_str()) {
-            if let Err(e) = self.validate_rpc_topic_uri(&uri) {
+            if let Err(e) = self.validate_rpc_response_address(&uri) {
                 return Err(CloudEventError::validation_error(format!(
                     "Invalid RPC Request CloudEvent source [{source}] - {e}"
                 )));
@@ -521,7 +450,7 @@ impl CloudEventValidator for ResponseValidator {
     fn validate_sink(&self, cloud_event: &Event) -> Result<(), CloudEventError> {
         if let Some(sink) = UCloudEventUtils::get_sink(cloud_event) {
             if let Ok(uri) = UUri::from_str(sink.as_str()) {
-                if let Err(e) = self.validate_rpc_topic_uri(&uri) {
+                if let Err(e) = self.validate_rpc_response_address(&uri) {
                     return Err(CloudEventError::validation_error(format!(
                         "Invalid RPC Response CloudEvent sink [{sink}] - {e}"
                     )));
@@ -566,16 +495,22 @@ impl std::fmt::Display for ResponseValidator {
 mod tests {
     use super::*;
 
-    use cloudevents::{Data, EventBuilder, EventBuilderV03, EventBuilderV10};
+    use cloudevents::{AttributesWriter, Data, EventBuilder, EventBuilderV03, EventBuilderV10};
     use protobuf::{well_known_types::any::Any, Message};
     use uuid::Uuid;
 
     use crate::cloudevents::{UCloudEventAttributesBuilder, UCloudEventBuilder};
-    use crate::{UAuthority, UEntity, UPriority, UUIDBuilder};
+    use crate::{UPriority, UUIDBuilder};
+
+    const BODY_ACCESS_EVENT_URI_LOCAL: &str = "/36A1/2/A001";
+    const BODY_ACCESS_EVENT_URI_REMOTE: &str = "//VCU.myvin/36A1/2/A001";
+
+    const BODY_ACCESS_METHOD_REMOTE: &str = "//VCU.myvin/36A1/2/1F";
+    const PETAPP_RESPONSE_REMOTE: &str = "//bo.cloud/A4/5/0";
 
     #[test]
     fn test_get_a_publish_cloud_event_validator() {
-        let cloud_event = build_base_cloud_event_for_test();
+        let cloud_event = build_base_publish_cloud_event_for_test();
         let validator: Box<dyn CloudEventValidator> =
             CloudEventValidators::get_validator(&cloud_event);
         let status = validator.validate_type(&cloud_event);
@@ -586,11 +521,10 @@ mod tests {
 
     #[test]
     fn test_get_a_notification_cloud_event_validator() {
-        let mut cloud_event = build_base_cloud_event_for_test();
-        cloud_event.set_extension("sink", "//bo.cloud/petapp");
+        let mut cloud_event = build_base_publish_cloud_event_for_test();
+        cloud_event.set_extension("sink", "//bo.cloud/A4/5/10");
 
-        let validator: Box<dyn CloudEventValidator> =
-            CloudEventValidators::Notification.validator();
+        let validator = CloudEventValidators::Notification.validator();
         let status = validator.validate_type(&cloud_event);
 
         assert!(status.is_ok());
@@ -709,9 +643,9 @@ mod tests {
     #[test]
     fn validate_cloud_event_version_when_not_valid() {
         let builder = EventBuilderV03::new()
-            .id("id".to_string())
+            .id(UUIDBuilder::build())
             .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
-            .source("/body.access".to_string());
+            .source(BODY_ACCESS_EVENT_URI_LOCAL);
 
         let event = builder.build().unwrap();
         let validator = CloudEventValidators::get_validator(&event);
@@ -754,13 +688,10 @@ mod tests {
 
     #[test]
     fn validate_cloud_event_id_when_not_valid() {
-        let event = build_base_cloud_event_for_test();
+        let mut event = build_base_publish_cloud_event_for_test();
+        event.set_id("invalid_id");
         let status = CloudEventValidators::get_validator(&event).validate_id(&event);
         assert!(status.is_err());
-        assert!(status
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid CloudEvent Id [testme], CloudEvent Id must be of type UUIDv8"));
     }
 
     #[test]
@@ -768,49 +699,22 @@ mod tests {
         let uuid = UUIDBuilder::build();
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
-            .source("/body.access/1/door.front_left#Door".to_string())
+            .source(BODY_ACCESS_EVENT_URI_LOCAL)
             .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
             .build()
             .unwrap();
 
         let validator = CloudEventValidators::Publish.validator();
         let status = validator.validate(&event);
-        assert!(status.is_err());
-        assert!(status
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid CloudEvent sink, sink must be an uri"));
+        assert!(status.is_ok());
     }
 
     #[test]
     fn test_publish_type_cloudevent_is_valid_when_everything_is_valid_remote() {
         let uuid = UUIDBuilder::build();
-        let uri = "//VCU.myvin/body.access/1/door.front_left#Door";
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
-            .source(uri)
-            .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
-            .build();
-        let event = event.unwrap();
-
-        let validator = CloudEventValidators::get_validator(&event);
-        let status = validator.validate(&event);
-        assert!(status.is_err());
-        assert!(status
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid CloudEvent sink, sink must be an uri"));
-    }
-
-    #[test]
-    fn test_publish_type_cloudevent_is_valid_when_everything_is_valid_remote_with_a_sink() {
-        let uuid = UUIDBuilder::build();
-        let uri = "//VCU.myvin/body.access/1/door.front_left#Door";
-        let sink = "//bo.cloud/petapp";
-        let event = build_base_cloud_event_builder_for_test()
-            .id(uuid)
-            .source(uri)
-            .extension("sink", sink.to_string())
+            .source(BODY_ACCESS_EVENT_URI_REMOTE)
             .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
             .build()
             .unwrap();
@@ -821,9 +725,27 @@ mod tests {
     }
 
     #[test]
+    fn test_publish_type_cloudevent_is_invalid_with_a_sink() {
+        let uuid = UUIDBuilder::build();
+        let uri = BODY_ACCESS_EVENT_URI_REMOTE;
+        let sink = "//bo.cloud/petapp";
+        let event = build_base_cloud_event_builder_for_test()
+            .id(uuid)
+            .source(uri)
+            .extension("sink", sink)
+            .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
+            .build()
+            .unwrap();
+
+        let validator = CloudEventValidators::get_validator(&event);
+        let status = validator.validate(&event);
+        assert!(status.is_err());
+    }
+
+    #[test]
     fn test_publish_type_cloudevent_is_not_valid_when_remote_with_invalid_sink() {
         let uuid = UUIDBuilder::build();
-        let uri = "//VCU.myvin/body.access/1/door.front_left#Door";
+        let uri = BODY_ACCESS_EVENT_URI_REMOTE;
         let sink = "//bo.cloud";
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
@@ -874,7 +796,7 @@ mod tests {
 
     #[test]
     fn test_publish_type_cloudevent_is_not_valid_when_source_is_missing_message_info() {
-        let uri = "/body.access/1/door.front_left";
+        let uri = BODY_ACCESS_EVENT_URI_LOCAL;
 
         let event = build_base_cloud_event_builder_for_test()
             .id("testme".to_string())
@@ -892,12 +814,12 @@ mod tests {
     #[test]
     fn test_notification_type_cloudevent_is_valid_when_everything_is_valid() {
         let uuid = UUIDBuilder::build();
-        let uri = "/body.access/1/door.front_left#Door";
-        let sink = "//bo.cloud/petapp";
+        let uri = BODY_ACCESS_EVENT_URI_LOCAL;
+        let sink = "//bo.cloud/23/2/1A45";
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
             .source(uri)
-            .extension("sink", sink.to_string())
+            .extension("sink", sink)
             .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
             .build()
             .unwrap();
@@ -910,7 +832,7 @@ mod tests {
     #[test]
     fn test_notification_type_cloudevent_is_not_valid_missing_sink() {
         let uuid = UUIDBuilder::build();
-        let uri = UUri::from_str("/body.access/1/door.front_left#Door").unwrap();
+        let uri = UUri::from_str(BODY_ACCESS_EVENT_URI_LOCAL).unwrap();
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
             .source(uri.to_string())
@@ -927,12 +849,10 @@ mod tests {
     #[test]
     fn test_notification_type_cloudevent_is_not_valid_invalid_sink() {
         let uuid = UUIDBuilder::build();
-        let uri = UUri::from_str("/body.access/1/door.front_left#Door").unwrap();
-        let sink = UUri::from_str("//bo.cloud").unwrap();
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
-            .source(uri.to_string())
-            .extension("sink", sink.to_string())
+            .source(BODY_ACCESS_EVENT_URI_LOCAL)
+            .extension("sink", "//bo.cloud")
             .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
             .build()
             .unwrap();
@@ -946,12 +866,12 @@ mod tests {
     #[test]
     fn test_request_type_cloudevent_is_valid_when_everything_is_valid() {
         let uuid = UUIDBuilder::build();
-        let source = "//bo.cloud/petapp//rpc.response";
-        let sink = "//VCU.myvin/body.access/1/rpc.UpdateDoor";
+        let source = PETAPP_RESPONSE_REMOTE;
+        let sink = BODY_ACCESS_METHOD_REMOTE;
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
             .source(source)
-            .extension("sink", sink.to_string())
+            .extension("sink", sink)
             .ty(UMessageType::UMESSAGE_TYPE_REQUEST.to_cloudevent_type())
             .build()
             .unwrap();
@@ -1024,12 +944,12 @@ mod tests {
     #[test]
     fn test_response_type_cloudevent_is_valid_when_everything_is_valid() {
         let uuid = UUIDBuilder::build();
-        let source = "//VCU.myvin/body.access/1/rpc.UpdateDoor";
-        let sink = "//bo.cloud/petapp//rpc.response";
+        let source = BODY_ACCESS_METHOD_REMOTE;
+        let sink = PETAPP_RESPONSE_REMOTE;
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
             .source(source)
-            .extension("sink", sink.to_string())
+            .extension("sink", sink)
             .ty(UMessageType::UMESSAGE_TYPE_RESPONSE.to_cloudevent_type())
             .build()
             .unwrap();
@@ -1079,8 +999,8 @@ mod tests {
     #[test]
     fn test_response_type_cloudevent_is_not_valid_invalid_source_not_rpc_command() {
         let uuid = UUIDBuilder::build();
-        let source = "//bo.cloud/petapp/1/dog";
-        let sink = "//VCU.myvin/body.access/1/UpdateDoor";
+        let source = BODY_ACCESS_METHOD_REMOTE;
+        let sink = BODY_ACCESS_METHOD_REMOTE;
         let event = build_base_cloud_event_builder_for_test()
             .id(uuid)
             .source(source)
@@ -1096,21 +1016,6 @@ mod tests {
     }
 
     fn build_base_cloud_event_builder_for_test() -> EventBuilderV10 {
-        let uri = UUri {
-            authority: Some(UAuthority::default()).into(),
-            entity: Some(UEntity {
-                name: "body.access".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            resource: Some(UResource {
-                name: "door".to_string(),
-                ..Default::default()
-            })
-            .into(),
-            ..Default::default()
-        };
-        let source = String::try_from(&uri).unwrap();
         let payload = build_proto_payload_for_test();
         let attributes = UCloudEventAttributesBuilder::new()
             .with_hash("somehash".to_string())
@@ -1120,15 +1025,15 @@ mod tests {
             .build();
 
         UCloudEventBuilder::build_base_cloud_event(
-            "testme",
-            &source,
+            UUIDBuilder::build().to_hyphenated_string().as_str(),
+            BODY_ACCESS_EVENT_URI_LOCAL,
             &payload.write_to_bytes().unwrap(),
             &payload.type_url,
             &attributes,
         )
     }
 
-    fn build_base_cloud_event_for_test() -> Event {
+    fn build_base_publish_cloud_event_for_test() -> Event {
         let mut builder = build_base_cloud_event_builder_for_test();
         builder = builder.ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type());
         builder.build().unwrap()
@@ -1136,8 +1041,8 @@ mod tests {
 
     fn build_proto_payload_for_test() -> Any {
         let event = EventBuilderV10::new()
-            .id("hello")
-            .source("/body.access")
+            .id(UUIDBuilder::build())
+            .source(BODY_ACCESS_EVENT_URI_LOCAL)
             .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
             .data_with_schema(
                 "application/octet-stream",

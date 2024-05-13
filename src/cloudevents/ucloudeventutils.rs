@@ -494,30 +494,30 @@ mod tests {
     use url::Url;
 
     // cloudevents-sdk
-    use cloudevents::{Data, Event, EventBuilder, EventBuilderV10};
+    use cloudevents::{AttributesWriter, Data, Event, EventBuilder, EventBuilderV10};
 
     // protoc-generated code from cloudevents.proto
     use crate::proto_cloudevents::cloudevents::CloudEvent;
 
     use crate::cloudevents::{UCloudEventAttributes, UCloudEventBuilder};
-    use crate::{UEntity, UMessageType, UPriority, UResource, UUIDBuilder, UUri};
+    use crate::{UMessageType, UPriority, UUIDBuilder};
 
     #[test]
     fn test_extract_source_from_cloud_event() {
-        let builder = build_base_cloud_event_for_test();
-        let cloud_event: Event = builder.build().expect("Failed to build the cloud event");
+        let source = "/5A3/1/A53E";
+        let cloud_event = EventBuilderV10::new()
+            .id(UUIDBuilder::build())
+            .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
+            .source(source)
+            .build()
+            .expect("Failed to build the cloud event");
 
-        let source = UCloudEventUtils::get_source(&cloud_event);
-
-        assert_eq!(
-            Some("/body.access//door.front_left#Door".to_string()),
-            source
-        );
+        assert_eq!(UCloudEventUtils::get_source(&cloud_event).unwrap(), source);
     }
 
     #[test]
     fn test_extract_sink_from_cloud_event_when_sink_exists() {
-        let sink_for_test = "//bo.cloud/petapp/1/rpc.response";
+        let sink_for_test = "//bo.cloud/A5/1/45";
 
         let builder = build_base_cloud_event_for_test();
         let cloud_event: Event = builder
@@ -525,8 +525,10 @@ mod tests {
             .build()
             .expect("Failed to build the cloud event");
 
-        let sink = UCloudEventUtils::get_sink(&cloud_event);
-        assert_eq!(Some(sink_for_test.to_string()), sink);
+        assert_eq!(
+            UCloudEventUtils::get_sink(&cloud_event).unwrap(),
+            sink_for_test
+        );
     }
 
     #[test]
@@ -751,7 +753,8 @@ mod tests {
     #[test]
     fn test_extract_creation_timestamp_from_cloud_event_uuid_id_when_not_a_uuidv8_id() {
         let builder = build_base_cloud_event_for_test();
-        let cloud_event: Event = builder.build().expect("Failed to build the cloud event");
+        let mut cloud_event: Event = builder.build().expect("Failed to build the cloud event");
+        cloud_event.set_id("invalid_id");
 
         let creation_timestamp = UCloudEventUtils::get_creation_timestamp(&cloud_event);
 
@@ -946,8 +949,12 @@ mod tests {
 
     #[test]
     fn test_cloudevent_does_not_have_a_uuid_just_some_string() {
-        let builder = build_base_cloud_event_for_test().extension("ttl", 3);
-        let cloud_event = builder.build().unwrap();
+        let cloud_event = EventBuilderV10::new()
+            .id("invalid_id")
+            .source("/A1/1/34")
+            .ty(UMessageType::UMESSAGE_TYPE_PUBLISH.to_cloudevent_type())
+            .build()
+            .unwrap();
 
         assert!(!UCloudEventUtils::is_cloud_event_id(&cloud_event));
     }
@@ -1138,54 +1145,8 @@ mod tests {
         assert!(extracted.is_err());
     }
 
-    #[test]
-    fn test_pretty_printing_a_cloudevent_with_a_sink() {
-        let sink_for_test = "//bo.cloud/petapp/1/rpc.response";
-
-        let cloud_event = build_base_cloud_event_for_test()
-            .extension("sink", sink_for_test)
-            .build()
-            .unwrap();
-
-        let pretty_print = UCloudEventUtils::to_string(&cloud_event);
-
-        let expected = "CloudEvent{id='testme', source='/body.access//door.front_left#Door', \
-                    sink='//bo.cloud/petapp/1/rpc.response', type='pub.v1'}";
-
-        assert_eq!(expected, pretty_print);
-    }
-
-    #[test]
-    fn test_pretty_printing_a_cloudevent_without_a_sink() {
-        let cloud_event = build_base_cloud_event_for_test().build().unwrap();
-
-        let pretty_print = UCloudEventUtils::to_string(&cloud_event);
-
-        let expected =
-            "CloudEvent{id='testme', source='/body.access//door.front_left#Door', type='pub.v1'}";
-
-        assert_eq!(expected, pretty_print);
-    }
-
     fn build_base_cloud_event_for_test() -> EventBuilderV10 {
-        let entity = UEntity {
-            name: "body.access".into(),
-            ..Default::default()
-        };
-        let resource = UResource {
-            name: "door".into(),
-            instance: Some("front_left".into()),
-            message: Some("Door".into()),
-            ..Default::default()
-        };
-        let uri = UUri {
-            entity: Some(entity).into(),
-            resource: Some(resource).into(),
-            authority: None.into(),
-            ..Default::default()
-        };
-
-        let source = String::try_from(&uri).unwrap();
+        let source = String::from("/5A3/1/A53E");
 
         // fake payload
         let payload = pack_event_into_any(&build_proto_payload_for_test());
@@ -1199,7 +1160,7 @@ mod tests {
             .build();
 
         let event = UCloudEventBuilder::build_base_cloud_event(
-            "testme",
+            UUIDBuilder::build().to_hyphenated_string().as_str(),
             &source,
             &payload.value,
             payload.type_url.as_str(),
