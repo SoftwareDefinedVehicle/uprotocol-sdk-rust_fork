@@ -93,11 +93,11 @@ impl UriValidator {
     /// Returns a `UUriError::ValidationError` in the following cases:
     ///
     /// - If the `UUri` fails the basic validation checks performed by `Self::validate`. The error message will contain details about what aspect of the `UUri` was invalid, as determined by the validation logic in `Self::validate`.
-    /// - If the `UUri` is not of the correct type to be used as an RPC response. In this case, the error message will be "Invalid RPC response type", indicating that the `UUri` does not meet the specific criteria for RPC response URIs.
+    /// - If the `UUri` is not of the correct type to be used as an RPC response. In this case, the error message will be "Invalid RPC response address", indicating that the `UUri` does not meet the specific criteria for RPC response URIs.
     pub fn validate_rpc_response(uri: &UUri) -> Result<(), UUriError> {
         Self::validate(uri)?;
         if !Self::is_rpc_response(uri) {
-            return Err(UUriError::validation_error("Invalid RPC response type"));
+            return Err(UUriError::validation_error("Invalid RPC response address"));
         }
         Ok(())
     }
@@ -1159,7 +1159,7 @@ mod tests {
         }
     }
 
-    #[test_case( "/petapp/1/rpc.OpenWindow", "Invalid RPC response type"; "fail for bad rpc response uri")]
+    #[test_case( "/petapp/1/rpc.OpenWindow", "Invalid RPC response address"; "fail for bad rpc response uri")]
     fn test_invalid_rpc_response_uris(uri: &str, message: &str) {
         if let Ok(uuri) = UUri::from_str(uri) {
             let status = UriValidator::validate_rpc_response(&uuri);

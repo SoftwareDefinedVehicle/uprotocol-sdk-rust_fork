@@ -15,7 +15,7 @@ use std::{default::Default, fmt};
 
 use protobuf::{well_known_types::any::Any, MessageFull};
 
-use crate::{Data, RpcClientResult, UCode, UPayload, UPayloadFormat, UStatus};
+use crate::{Data, RpcClientResult, UCode, UMessage, UPayload, UPayloadFormat, UStatus};
 
 pub type RpcPayloadResult = Result<RpcPayload, RpcMapperError>;
 
@@ -51,6 +51,58 @@ impl fmt::Display for RpcMapperError {
 pub struct RpcMapper;
 
 impl RpcMapper {
+    pub fn extract_from_payload<T>(payload: UPayload) -> Result<T, RpcMapperError>
+    where
+        T: MessageFull + Default,
+    {
+        match payload
+            .format
+            .enum_value_or(UPayloadFormat::UPAYLOAD_FORMAT_UNSPECIFIED)
+        {
+            UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF => {
+                if let Some(Data::Value(bytes)) = &payload.data {
+                    return T::parse_from_bytes(bytes)
+                        .map_err(|e| RpcMapperError::ProtobufError(e.to_string()));
+                }
+            }
+            UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF_WRAPPED_IN_ANY => {
+                return Any::try_from(payload)
+                    .map_err(|_e| {
+                        RpcMapperError::UnknownType("Couldn't decode payload into Any".to_string())
+                    })
+                    .and_then(|any| match any.unpack::<T>() {
+                        Ok(Some(m)) => Ok(m),
+                        Ok(None) => Err(RpcMapperError::InvalidPayload(String::from(
+                            "Any-contained object is not of expected type",
+                        ))),
+                        Err(error) => Err(RpcMapperError::InvalidPayload(error.to_string())),
+                    });
+            }
+            _ => {
+                return Err(RpcMapperError::InvalidPayload(
+                    "Invalid or unsupported payload type".to_string(),
+                ));
+            }
+        }
+
+        Err(RpcMapperError::UnexpectedError(
+            "Couldn't extract payload from message".to_string(),
+        ))
+    }
+
+    pub fn extract_from_message<T>(message: UMessage) -> Result<T, RpcMapperError>
+    where
+        T: MessageFull + Default,
+    {
+        if let Some(payload) = message.payload.into_option() {
+            RpcMapper::extract_from_payload(payload)
+        } else {
+            Err(RpcMapperError::UnexpectedError(
+                "Couldn't extract payload from message".to_string(),
+            ))
+        }
+    }
+
     /// Maps the payload data returned by a peer to the expected return type of the RPC method.
     ///
     /// # Parameters
