@@ -29,3 +29,9 @@ skip-tree = [
     { crate = "windows-sys", reason = "a foundational crate for many that bumps far too frequently to ever have a shared version" },
     { crate = "wasip3", reason = "skipping this tree because it pulls in a conflicting version of wit-bindgen but we cannot disable support for it" },
 ]
+
+[advisories]
+ignore = [
+    { id = "RUSTSEC-2026-0194", reason = "this advisory is for a downstream dependency of the cucumber crate which is only used during the build process" },
+    { id = "RUSTSEC-2026-0195", reason = "this advisory is for a downstream dependency of the cucumber crate which is only used during the build process" },
+]
