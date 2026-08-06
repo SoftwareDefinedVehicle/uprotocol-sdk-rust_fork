@@ -437,7 +437,7 @@ impl UPayload {
     #[cfg(feature = "protobuf-support")]
     pub fn extract_protobuf<T>(&self) -> Result<T, crate::UMessageError>
     where
-        T: crate::ProtobufMappable + Default,
+        T: crate::ProtobufMappable,
     {
         crate::umessage::deserialize_protobuf_bytes(&self.payload, &self.payload_format)
     }
