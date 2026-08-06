@@ -16,7 +16,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::{ProtobufMappable, UAttributes, UCode, UStatus, UUri};
+use crate::{UAttributes, UCode, UStatus, UUri};
 
 use super::{CallOptions, RegistrationError, UPayload};
 
@@ -194,7 +194,7 @@ impl dyn RpcClient {
     ///
     /// Returns an error if invocation fails, the given arguments cannot be turned into a valid RPC Request message,
     /// result protobuf deserialization fails, or result payload is empty.
-    pub async fn invoke_proto_method<T: ProtobufMappable, R: ProtobufMappable>(
+    pub async fn invoke_proto_method<T: crate::ProtobufMappable, R: crate::ProtobufMappable>(
         &self,
         method: UUri,
         call_options: CallOptions,
