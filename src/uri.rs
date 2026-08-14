@@ -844,7 +844,7 @@ impl UUri {
         }
     }
 
-    /// Checks if this UUri can be used as the source of an event.
+    /// Checks if this UUri can be used as the source of an event or notification.
     ///
     /// Returns `true` if resource ID >= 0x8000.
     ///
@@ -861,7 +861,7 @@ impl UUri {
         self.resource_id >= RESOURCE_ID_MIN_EVENT
     }
 
-    /// Verifies that this UUri can be used as the source of an event.
+    /// Verifies that this UUri can be used as the source of an event or notification.
     ///
     /// # Errors
     ///
