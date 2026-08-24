@@ -155,9 +155,23 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2.85.8
-        with:
-          tool: cargo-hack
+      - name: Install cargo-hack
+        env:
+          CARGO_HACK_VERSION: "v0.6.45"
+        run: |
+          # See https://github.com/taiki-e/cargo-hack#from-prebuilt-binaries
+          # Get host target.
+          host=$(rustc -vV | grep '^host:' | cut -d' ' -f2)
+          # Download binary.
+          curl --proto '=https' --tlsv1.2 -fsSL -o cargo-hack.tar.gz "https://github.com/taiki-e/cargo-hack/releases/download/${CARGO_HACK_VERSION}/cargo-hack-${host}.tar.gz"
+          # Verify release attestations.
+          gh release -R https://github.com/taiki-e/cargo-hack verify-asset cargo-hack.tar.gz
+          # Verify artifact attestations.
+          gh attestation verify --repo taiki-e/cargo-hack --signer-workflow taiki-e/github-actions/.github/workflows/rust-release.yml cargo-hack.tar.gz
+          # Install to $CARGO_HOME/bin (or $HOME/.cargo/bin if CARGO_HOME is unset).
+          tar xf cargo-hack.tar.gz -C "${CARGO_HOME:-"$HOME/.cargo"}"/bin
+          # Remove archive.
+          rm cargo-hack.tar.gz
       - name: Run cargo hack powerset
         run: |
           cargo hack check \
