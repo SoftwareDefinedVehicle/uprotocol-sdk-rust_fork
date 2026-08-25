@@ -77,8 +77,10 @@ pub use uattributes::{
 
 mod umessage;
 pub use umessage::{
-    BuilderState, NotificationBuilderState, PublishBuilderState, RequestBuilderState,
-    ResponseBuilderState, UMessage, UMessageBuilder, UMessageError,
+    BuilderState, FieldExtractor, FieldInjector, MessageFinalizer, NotificationBuilderState,
+    PayloadExtractor, PayloadInjector, PublishBuilderState, RequestBuilderState,
+    ResponseBuilderState, UAttributesExtractor, UAttributesInjector, UMessage, UMessageBuilder,
+    UMessageError,
 };
 
 mod uri;

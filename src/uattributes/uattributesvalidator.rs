@@ -453,6 +453,7 @@ impl UAttributesValidator for ResponseValidator {
             self.validate_source(attributes),
             self.validate_sink(attributes),
             self.validate_reqid(attributes),
+            // [impl->dsn~up-attributes-response-priority~1]
             validate_rpc_priority(attributes),
         ]
         .into_iter()

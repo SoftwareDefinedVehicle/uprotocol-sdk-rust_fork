@@ -14,15 +14,17 @@
 use bytes::Bytes;
 use thiserror::Error;
 
+pub use mapping::*;
 #[cfg(all(feature = "up-l2-api", feature = "protobuf-support"))]
 pub(crate) use protobuf_support::deserialize_protobuf_bytes;
 pub use umessagebuilder::*;
 
 use crate::{
-    SerializationError, UAttributes, UAttributesError, UCode, UMessageType, UPayloadFormat,
-    UPriority, UUri, UUID,
+    SerializationError, UAttributes, UAttributesError, UAttributesValidators, UCode, UMessageType,
+    UPayloadFormat, UPriority, UUri, UUID,
 };
 
+mod mapping;
 mod umessagebuilder;
 
 pub(crate) type Payload = Bytes;
@@ -76,17 +78,161 @@ pub struct UMessage {
 }
 
 impl UMessage {
-    // This convenience constructor is used internally only, e.g. by the UMessageBuilder for creating
-    // the final message after validation.
-    // Client code can create UMessages using the UMessageBuilder only.
+    /// This convenience constructor is used internally only, e.g. by the UMessageBuilder for creating
+    /// the final message after validation. Client code can create UMessages using the UMessageBuilder only.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the given attributes and payload fail
+    /// [UMessage validation](crate::UAttributesValidator).
     pub(crate) fn new(
         attributes: UAttributes,
         payload: Option<Bytes>,
     ) -> Result<Self, UMessageError> {
+        UAttributesValidators::get_validator_for_attributes(&attributes).validate(&attributes)?;
         Ok(UMessage {
             attributes,
             payload,
         })
+    }
+
+    /// Creates a uProtocol message from attributes and payload extracted from a custom message type.
+    ///
+    /// # Arguments
+    ///
+    /// * `extractor` - A reference to a the helper that should be used to extract [UAttributes] and payload
+    ///   from the custom message type.
+    /// * `fail_if_expired` - If `true``, the function will return an error if the extracted
+    ///   message has expired.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if
+    /// * `fail_if_expired` is `true` and the extracted [attributes are expired](UAttributes::check_expired), or
+    /// * the extracted fields and payload fail [UMessage validation](crate::UAttributesValidator::validate).
+    /// [UMessage validation](crate::UAttributesValidator).
+    pub fn from_attributes<E>(extractor: &E, fail_if_expired: bool) -> Result<Self, UMessageError>
+    where
+        E: mapping::UAttributesExtractor + mapping::PayloadExtractor,
+    {
+        let attributes = extractor.extract_attributes()?;
+        if fail_if_expired {
+            attributes.check_expired()?;
+        }
+        let payload = extractor.extract_payload()?;
+        Self::new(attributes, payload)
+    }
+
+    /// Creates a uProtocol message from fields and payload extracted from a custom message type.
+    ///
+    /// # Arguments
+    ///
+    /// * `extractor` - A reference to a the helper that should be used to extract field values
+    ///   and payload from the custom message type.
+    /// * `fail_if_expired` - If `true``, the function will return an error if the extracted
+    ///   message has expired.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if
+    /// * `fail_if_expired` is `true` and the extracted UUID [is expired](UUID::check_expired), or
+    /// * the extracted fields and payload fail [UMessage validation](crate::UAttributesValidator).
+    pub fn from_fields<E>(extractor: &E, fail_if_expired: bool) -> Result<UMessage, UMessageError>
+    where
+        E: mapping::FieldExtractor + mapping::PayloadExtractor,
+    {
+        let id = extractor.extract_id()?;
+        let ttl = extractor.extract_ttl()?;
+
+        if fail_if_expired {
+            if let Some(ttl) = ttl {
+                id.check_expired(ttl)?;
+            }
+        }
+
+        let attributes = UAttributes {
+            id,
+            type_: extractor.extract_type()?,
+            source: extractor.extract_source()?,
+            sink: extractor.extract_sink()?,
+            priority: extractor.extract_priority()?,
+            ttl,
+            token: extractor.extract_token()?,
+            permission_level: extractor.extract_permission_level()?,
+            reqid: extractor.extract_request_id()?,
+            commstatus: extractor.extract_commstatus()?,
+            traceparent: extractor.extract_traceparent()?,
+            payload_format: extractor.extract_payload_format()?,
+        };
+        let payload = extractor.extract_payload()?;
+        UMessage::new(attributes, payload)
+    }
+
+    /// Maps this message to a custom message type.
+    ///
+    /// Maps the message's attributes _en bloc_ to the target type using the provided injector.
+    ///
+    /// # Arguments
+    /// * `injector` - The injector to use for injecting the message's attributes
+    ///   and payload into the custom message.
+    ///
+    /// # Returns
+    /// Returns the custom message type.
+    ///
+    /// # Errors
+    /// Returns an error if the uProtocol message's attributes or payload cannot be injected into the custom message.
+    pub fn map_to_target_attributes<I, T>(&self, mut injector: I) -> Result<T, UMessageError>
+    where
+        I: mapping::UAttributesInjector
+            + mapping::PayloadInjector
+            + mapping::MessageFinalizer<Target = T>,
+    {
+        injector.inject_attributes(&self.attributes)?;
+        if let (Some(payload), Some(format)) = (self.payload(), self.payload_format()) {
+            // this will ALWAYS be the case, because the payload format is only
+            // set if the payload is set, and vice versa
+            injector.inject_payload(payload.clone(), format)?;
+        }
+        Ok(injector.finalize()?)
+    }
+
+    /// Maps this message to a custom message type.
+    ///
+    /// Maps the message's attributes individually to the target type using the provided injector.
+    ///
+    /// # Arguments
+    /// * `injector` - The injector to use for injecting the message's attributes
+    ///   and payload into the custom message.
+    ///
+    /// # Returns
+    /// Returns the custom message type.
+    ///
+    /// # Errors
+    /// Returns an error if the uProtocol message's attributes or payload cannot be injected into the custom message.
+    pub fn map_to_target_fields<I, T>(&self, mut injector: I) -> Result<T, UMessageError>
+    where
+        I: mapping::FieldInjector
+            + mapping::PayloadInjector
+            + mapping::MessageFinalizer<Target = T>,
+    {
+        injector.inject_type(self.type_())?;
+        injector.inject_id(self.id())?;
+        injector.inject_source(self.source())?;
+        injector.inject_sink(self.sink())?;
+        injector.inject_priority(self.priority())?;
+        injector.inject_ttl(self.ttl())?;
+        injector.inject_token(self.token())?;
+        injector.inject_permission_level(self.permission_level())?;
+        injector.inject_request_id(self.request_id())?;
+        injector.inject_commstatus(self.commstatus())?;
+        injector.inject_traceparent(self.traceparent())?;
+        injector.inject_payload_format(self.payload_format())?;
+        if let (Some(payload), Some(format)) = (self.payload(), self.payload_format()) {
+            // this will ALWAYS be the case, because the payload format is only
+            // set if the payload is set, and vice versa
+            injector.inject_payload(payload.clone(), format)?;
+        }
+        Ok(injector.finalize()?)
     }
 
     /// Get this message's attributes.
@@ -1001,7 +1147,7 @@ mod core_types_support {
                 .into(),
                 source: Some(crate::up_core_api::uri::UUri {
                     authority_name: "source".to_string(),
-                    ue_id: 0x0001,
+                    ue_id: 0x1001,
                     ue_version_major: 0x01,
                     resource_id: 0x8001,
                     ..Default::default()

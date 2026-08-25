@@ -50,9 +50,9 @@ impl UMessageType {
     ///
     /// Returns a [`UAttributesError::ParsingError`] if the given name does not match
     /// any of the supported message types.
-    pub fn try_from_cloudevent_type<S: Into<String>>(value: S) -> Result<Self, UAttributesError> {
-        let type_string = value.into();
-        match type_string.as_str() {
+    pub fn try_from_cloudevent_type<S: AsRef<str>>(value: S) -> Result<Self, UAttributesError> {
+        let type_string = value.as_ref();
+        match type_string {
             CE_TYPE_PUBLISH => Ok(UMessageType::Publish),
             CE_TYPE_NOTIFICATION => Ok(UMessageType::Notification),
             CE_TYPE_REQUEST => Ok(UMessageType::Request),

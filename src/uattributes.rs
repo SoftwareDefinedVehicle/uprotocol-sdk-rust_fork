@@ -38,6 +38,8 @@ pub enum UAttributesError {
     ExpiredError,
     #[error("Parsing error: {0}")]
     ParsingError(String),
+    #[error("Mapping error: {0}")]
+    MappingError(String),
 }
 
 impl UAttributesError {
@@ -53,6 +55,13 @@ impl UAttributesError {
         T: Into<String>,
     {
         Self::ParsingError(message.into())
+    }
+
+    pub fn mapping_error<T>(message: T) -> UAttributesError
+    where
+        T: Into<String>,
+    {
+        Self::MappingError(message.into())
     }
 }
 
