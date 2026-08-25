@@ -16,7 +16,7 @@ mod umessagetype;
 mod upayloadformat;
 mod upriority;
 
-use std::time::SystemTime;
+use thiserror::Error;
 
 pub use uattributesvalidator::*;
 pub use umessagetype::UMessageType;
@@ -30,9 +30,13 @@ pub(crate) const UPRIORITY_DEFAULT: UPriority = UPriority::CS1;
 pub(crate) type TokenString = String;
 pub(crate) type TraceparentString = String;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum UAttributesError {
+    #[error("Validation failure: {0}")]
     ValidationError(String),
+    #[error("Message expired")]
+    ExpiredError,
+    #[error("Parsing error: {0}")]
     ParsingError(String),
 }
 
@@ -51,17 +55,6 @@ impl UAttributesError {
         Self::ParsingError(message.into())
     }
 }
-
-impl std::fmt::Display for UAttributesError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ValidationError(e) => f.write_fmt(format_args!("Validation failure: {e}")),
-            Self::ParsingError(e) => f.write_fmt(format_args!("Parsing error: {e}")),
-        }
-    }
-}
-
-impl std::error::Error for UAttributesError {}
 
 impl From<UUriError> for UAttributesError {
     fn from(value: UUriError) -> Self {
@@ -290,20 +283,23 @@ impl UAttributes {
     /// Returns an error if [`Self::ttl`] (time-to-live) contains a value greater than 0, but
     /// * the current system time cannot be determined, or
     /// * the message has expired according to the timestamp extracted from [`Self::id`] and the time-to-live value.
+    ///
+    /// # Example
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use up_rust::{UMessageBuilder, UUri};
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    ///     .build()?;
+    /// assert!(publish_msg.attributes().check_expired().is_ok());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn check_expired(&self) -> Result<(), UAttributesError> {
-        if let Some(ttl) = self.ttl {
-            if ttl == 0 {
-                return Ok(());
-            }
+        if let Some(ttl) = self.ttl() {
+            self.id().check_expired(ttl)
+        } else {
+            Ok(())
         }
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(|_e| {
-                UAttributesError::validation_error("Cannot determine current system time")
-            })
-            .and_then(|duration_since_epoch| {
-                self.check_expired_for_reference(duration_since_epoch.as_millis())
-            })
     }
 
     /// Checks if the message that is described by these attributes should be considered expired.
@@ -318,19 +314,34 @@ impl UAttributes {
     /// Returns an error if [`Self::ttl`] (time-to-live) contains a value greater than 0, but
     /// the message has expired according to the timestamp extracted from [`Self::id`], the
     /// time-to-live value and the provided reference time.
+    ///
+    /// # Example
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use std::time::SystemTime;
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// let now = SystemTime::now()
+    ///     .duration_since(SystemTime::UNIX_EPOCH)?
+    ///     .as_millis();
+    ///
+    /// let reference_time = now + 300_000; // 5 minutes from now
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    ///     .with_ttl(5_000) // Set a TTL of 5 seconds
+    ///     .build()?;
+    /// assert!(publish_msg.attributes().check_expired_for_reference(reference_time).is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn check_expired_for_reference(
         &self,
         reference_time: u128,
     ) -> Result<(), UAttributesError> {
-        let ttl = match self.ttl {
-            Some(t) if t > 0 => u128::from(t),
-            _ => return Ok(()),
-        };
-
-        if (self.id.get_time() as u128).saturating_add(ttl) <= reference_time {
-            return Err(UAttributesError::validation_error("Message has expired"));
+        if let Some(ttl) = self.ttl() {
+            self.id().check_expired_for_reference(ttl, reference_time)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -542,55 +553,5 @@ mod core_types_support {
             let attribs_proto = mutator(valid_attribs_proto);
             UAttributes::try_from(&attribs_proto).map(|_| ())
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::UNIX_EPOCH;
-
-    use super::*;
-    use test_case::test_case;
-
-    /// Creates a UUID for a given creation time offset.
-    ///
-    /// # Note
-    ///
-    /// For internal testing purposes only. For end-users, please use [`UUID::build()`]
-    fn build_for_time_offset(offset_millis: i64) -> UUID {
-        let duration_since_unix_epoch = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("current system time is set to a point in time before UNIX Epoch");
-        let now_as_millis_since_epoch: u64 = u64::try_from(duration_since_unix_epoch.as_millis())
-            .expect("current system time is too far in the future");
-        let creation_timestamp = now_as_millis_since_epoch
-            .checked_add_signed(offset_millis)
-            .unwrap();
-        UUID::build_for_timestamp_millis(creation_timestamp)
-    }
-
-    #[test_case(build_for_time_offset(-1000), None, false; "for past message without TTL")]
-    #[test_case(build_for_time_offset(-1000), Some(0), false; "for past message with TTL 0")]
-    #[test_case(build_for_time_offset(-1000), Some(500), true; "for past message with expired TTL")]
-    #[test_case(build_for_time_offset(-1000), Some(2000), false; "for past message with non-expired TTL")]
-    #[test_case(build_for_time_offset(1000), Some(2000), false; "for future message with TTL")]
-    #[test_case(build_for_time_offset(1000), None, false; "for future message without TTL")]
-    fn test_is_expired(id: UUID, ttl: Option<u32>, should_be_expired: bool) {
-        let attributes = UAttributes {
-            type_: UMessageType::Notification,
-            id,
-            ttl,
-            priority: None,
-            commstatus: None,
-            source: UUri::try_from_parts("source", 0x01, 0x02, 0x9000).unwrap(),
-            sink: None,
-            permission_level: None,
-            token: None,
-            traceparent: None,
-            reqid: None,
-            payload_format: None,
-        };
-
-        assert!(attributes.check_expired().is_err() == should_be_expired);
     }
 }

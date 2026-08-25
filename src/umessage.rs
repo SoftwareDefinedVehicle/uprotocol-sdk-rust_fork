@@ -12,6 +12,7 @@
  ********************************************************************************/
 
 use bytes::Bytes;
+use thiserror::Error;
 
 #[cfg(all(feature = "up-l2-api", feature = "protobuf-support"))]
 pub(crate) use protobuf_support::deserialize_protobuf_bytes;
@@ -26,28 +27,15 @@ mod umessagebuilder;
 
 pub(crate) type Payload = Bytes;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum UMessageError {
+    #[error("Attributes validation error: {0}")]
     AttributesValidationError(UAttributesError),
+    #[error("Failed to serialize message: {0}")]
     DataSerializationError(SerializationError),
+    #[error("UMessage payload error: {0}")]
     PayloadError(String),
 }
-
-impl std::fmt::Display for UMessageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::AttributesValidationError(e) => f.write_fmt(format_args!(
-                "Builder state is not consistent with message type: {e}"
-            )),
-            Self::DataSerializationError(e) => {
-                f.write_fmt(format_args!("Failed to serialize payload: {e}"))
-            }
-            Self::PayloadError(e) => f.write_fmt(format_args!("UMessage payload error: {e}")),
-        }
-    }
-}
-
-impl std::error::Error for UMessageError {}
 
 impl From<UAttributesError> for UMessageError {
     fn from(value: UAttributesError) -> Self {
@@ -646,6 +634,17 @@ impl UMessage {
     /// Checks if this message should be considered expired.
     ///
     /// This function simply delegates to [`UAttributes::check_expired`].
+    ///
+    /// # Example
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use up_rust::{UMessageBuilder, UUri};
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    ///     .build()?;
+    /// assert!(publish_msg.check_expired().is_ok());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn check_expired(&self) -> Result<(), UAttributesError> {
         self.attributes().check_expired()
     }
@@ -658,6 +657,25 @@ impl UMessage {
     ///
     /// * `reference_time` - The reference time as milliseconds since UNIX epoch. The check will
     ///   be performed in relation to this point in time.
+    ///
+    /// # Example
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use std::time::SystemTime;
+    /// use up_rust::{UMessageBuilder, UUri};
+    ///
+    /// let now = SystemTime::now()
+    ///     .duration_since(SystemTime::UNIX_EPOCH)?
+    ///     .as_millis();
+    ///
+    /// let reference_time = now + 300_000; // 5 minutes from now
+    /// let publish_msg = UMessageBuilder::publish(UUri::try_from("//my-vehicle/D45/1/A001")?)
+    ///     .with_ttl(5_000) // Set a TTL of 5 seconds
+    ///     .build()?;
+    /// assert!(publish_msg.check_expired_for_reference(reference_time).is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn check_expired_for_reference(
         &self,
         reference_time: u128,
@@ -985,7 +1003,7 @@ mod core_types_support {
                     authority_name: "source".to_string(),
                     ue_id: 0x0001,
                     ue_version_major: 0x01,
-                    resource_id: 0x0001,
+                    resource_id: 0x8001,
                     ..Default::default()
                 })
                 .into(),
@@ -1006,7 +1024,8 @@ mod core_types_support {
             };
             // WHEN converting the UMessageProto to a UMessage
             UMessage::try_from(&proto)
-                .expect("failed to convert UMessageProto to UMessage")
+                // THEN conversion succeeds
+                .expect("Failed to create UMessage from protobuf")
                 .payload_format()
         }
     }

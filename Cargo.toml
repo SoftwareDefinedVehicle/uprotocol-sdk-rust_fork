@@ -47,7 +47,7 @@ protobuf-support = ["dep:protobuf"]
 symphony = ["up-l2-rpc-server", "dep:serde", "dep:serde_json", "dep:symphony"]
 test-util = ["dep:mockall"]
 up-core-types = ["protobuf-support"]
-up-l2-api = ["dep:thiserror"]
+up-l2-api = []
 up-l2-notifier = ["up-l2-api"]
 up-l2-publisher = ["up-l2-api"]
 up-l2-subscriber = ["up-l2-api", "usubscription"]
@@ -68,7 +68,7 @@ regex = { version = "1.13.1", default-features = false, features = ["perf", "std
 serde = { version = "1.0.228", optional = true }
 serde_json = { version = "1.0.150", optional = true }
 symphony = { version = "0.1.5", optional = true }
-thiserror = { version = "1.0.69", optional = true }
+thiserror = { version = "2.0.20" }
 tokio = { version = "1.53.1", default-features = false, optional = true }
 tracing = { version = "0.1.44", default-features = false, features = ["log", "std"] }
 uriparse = { version = "0.6.4" }
