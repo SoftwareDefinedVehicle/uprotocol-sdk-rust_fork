@@ -91,7 +91,7 @@ jobs:
         id: upload_license_report
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           archive="license-report.tar.gz"
@@ -109,7 +109,7 @@ jobs:
         id: upload_requirements_tracing_report
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           archive="tracing-report-html.tar.gz"
@@ -127,7 +127,7 @@ jobs:
         id: upload_test_report
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           archive="test-results.tar.gz"
@@ -145,7 +145,7 @@ jobs:
         id: upload_test_coverage
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           archive="code-coverage-html.tar.gz"
@@ -158,7 +158,7 @@ jobs:
         id: upload_readme
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release upload "$TAG" README.md --clobber
@@ -174,7 +174,7 @@ jobs:
         id: upload_up_spec
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release upload "$TAG" up-spec.tar.gz --clobber
@@ -184,7 +184,7 @@ jobs:
         id: latest_release_info
         uses: joutvhu/get-release@8c3531bba0d249f5e7c3d7e1954d34db9edf2a90 # v1.0.4
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Collect quality artifacts
         uses: eclipse-dash/quevee@b62d7faa1cf68654758754aaed8616b19f227583 # v1.0.0
@@ -200,7 +200,7 @@ jobs:
         id: upload_quality_manifest
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           MANIFEST_FILE: ${{ steps.quevee_manifest.outputs.manifest_file }}
         run: |
