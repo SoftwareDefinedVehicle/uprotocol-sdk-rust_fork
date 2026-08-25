@@ -18,6 +18,8 @@ use std::{hash::Hash, str::FromStr};
 
 use uuid_simd::{AsciiCase, Out};
 
+use crate::UAttributesError;
+
 const BITMASK_VERSION: u64 = 0b1111 << 12;
 const VERSION_7: u64 = 0b0111 << 12;
 const BITMASK_VARIANT: u64 = 0b11 << 62;
@@ -238,6 +240,60 @@ impl UUID {
     pub fn get_time(&self) -> u64 {
         // the timestamp is contained in the 48 most significant bits
         self.msb >> 16
+    }
+
+    /// Checks if this UUID should be considered expired.
+    ///
+    /// # Arguments
+    /// * `ttl` - The time-to-live value for the UUID, in milliseconds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the time-to-live is greater than 0, but
+    /// * the current system time cannot be determined, or
+    /// * the timestamp extracted from this UUID plus the time-to-live value
+    ///   is less than or equal to the current system time.
+    pub fn check_expired(&self, ttl: u32) -> Result<(), UAttributesError> {
+        // messages with a TTL of 0 are considered to never expire, so we can skip the check in that case
+        if ttl == 0 {
+            return Ok(());
+        }
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|_| {
+                UAttributesError::validation_error(
+                    "current system time is set to a point in time before UNIX Epoch",
+                )
+            })?
+            .as_millis();
+        self.check_expired_for_reference(ttl, now)
+    }
+
+    /// Checks if this UUID should be considered expired.
+    ///
+    /// # Arguments
+    /// * `ttl` - The time-to-live value for the UUID, in milliseconds.
+    /// * `reference_time` - The reference time to use for the expiration check, in milliseconds since UNIX EPOCH.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the time-to-live is greater than 0, but
+    /// * the current system time cannot be determined, or
+    /// * the timestamp extracted from this UUID plus the time-to-live value
+    ///   is less than or equal to the given reference time.
+    pub fn check_expired_for_reference(
+        &self,
+        ttl: u32,
+        reference_time: u128,
+    ) -> Result<(), UAttributesError> {
+        // messages with a TTL of 0 are considered to never expire, so we can skip the check in that case
+        if ttl == 0 {
+            return Ok(());
+        }
+        if (self.get_time() as u128).saturating_add(ttl as u128) <= reference_time {
+            return Err(UAttributesError::ExpiredError);
+        }
+        Ok(())
     }
 }
 
@@ -463,7 +519,10 @@ impl FromStr for UUID {
 #[cfg(test)]
 mod tests {
 
+    use std::time::UNIX_EPOCH;
+
     use super::*;
+    use test_case::test_case;
 
     // [utest->dsn~uuid-spec~1]
     // [utest->req~uuid-type~1]
@@ -523,5 +582,29 @@ mod tests {
 
         assert_eq!(String::from(&uuid), "00000000-0001-7000-8010-101010101a1a");
         assert_eq!(String::from(uuid), "00000000-0001-7000-8010-101010101a1a");
+    }
+
+    fn build_for_time_offset(offset_millis: i64) -> UUID {
+        let duration_since_unix_epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("current system time is set to a point in time before UNIX Epoch");
+        let now_as_millis_since_epoch: u64 = u64::try_from(duration_since_unix_epoch.as_millis())
+            .expect("current system time is too far in the future");
+        let creation_timestamp = now_as_millis_since_epoch
+            .checked_add_signed(offset_millis)
+            .unwrap();
+        UUID::build_for_timestamp_millis(creation_timestamp)
+    }
+    #[test_case(build_for_time_offset(-1000), 0 => false; "for past message with TTL 0")]
+    #[test_case(build_for_time_offset(-1000), 500 => true; "for past message with expired TTL")]
+    #[test_case(build_for_time_offset(-1000), 2000 => false; "for past message with non-expired TTL")]
+    #[test_case(build_for_time_offset(1000), 2000 => false; "for future message with TTL")]
+    fn test_is_expired(id: UUID, ttl: u32) -> bool {
+        if id.check_expired(ttl).is_ok() {
+            false
+        } else {
+            id.check_expired(ttl)
+                .is_err_and(|e| matches!(e, UAttributesError::ExpiredError))
+        }
     }
 }
