@@ -228,6 +228,13 @@ pub trait USubscription: Send + Sync {
     /// * `topic` - The topic to subscribe to.
     /// * `expiration` - The point in time at which the subscription expires.
     ///   If not specified, the subscription is valid until explicitly unsubscribed.
+    ///   If expiration time is set in the past, no subscription is recorded and SubscriptionStatus::Unsubscribed
+    ///   is returned.
+    ///   When called for a topic that the client is already subscribed to and where the expiration field value differs
+    ///   from the current expiration time, the expiration field of the subscription is updated with the new value.
+    ///   When called for a topic that the client is already subscribed to where the expiration field value differs
+    ///   from the current expiration time and lies in the past, the subscription is unregistered and
+    ///   SubscriptionStatus::Unsubscribed is returned.
     /// * `min_sample_period` - The minimum duration between two events that should be maintained
     ///   for remote only topics. Device dispatchers (i.e. streamers) use this attribute to reduce the
     ///   publication rates of events sent between devices.

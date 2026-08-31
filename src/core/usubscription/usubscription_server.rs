@@ -139,7 +139,7 @@ pub fn pack_usubscription_response(
 ) -> Result<Option<UPayload>, UStatus> {
     match usubscription_response {
         USubscriptionResponse::Subscribe(response) => Ok(Some(
-            UPayload::try_from_protobuf(SubscribeResponseProto::from(&response))
+            UPayload::try_from_protobuf(response)
                 .map_err(|err| UStatus::fail_with_code(UCode::Internal, err.to_string()))?,
         )),
         USubscriptionResponse::Unsubscribe(_) => Ok(None),

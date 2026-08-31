@@ -98,17 +98,15 @@ impl USubscription for RpcClientUSubscription {
         topic_filter: Option<UUri>,
         subscriber_filter: Option<UUri>,
     ) -> Result<Vec<SubscriptionInfo>, UStatus> {
-        let fetch_subscriptions_request = FetchSubscriptionsRequest {
-            topic_filter: topic_filter.clone(),
-            subscriber_filter: subscriber_filter.clone(),
-        };
-
         Ok(self
             .rpc_client
             .invoke_proto_method::<_, FetchSubscriptionsResponse>(
                 usubscription_uri(RESOURCE_ID_FETCH_SUBSCRIPTIONS),
                 Self::default_call_options(),
-                fetch_subscriptions_request,
+                FetchSubscriptionsRequest {
+                    topic_filter,
+                    subscriber_filter,
+                },
             )
             .await?
             .subscriptions)
