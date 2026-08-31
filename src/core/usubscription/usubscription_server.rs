@@ -26,8 +26,7 @@ use crate::{
     up_core_api::usubscription::{
         FetchSubscriptionsRequest as FetchSubscriptionsRequestProto,
         FetchSubscriptionsResponse as FetchSubscriptionsResponseProto,
-        SubscribeRequest as SubscribeRequestProto, SubscribeResponse as SubscribeResponseProto,
-        UnsubscribeRequest as UnsubscribeRequestProto,
+        SubscribeRequest as SubscribeRequestProto, UnsubscribeRequest as UnsubscribeRequestProto,
     },
     UAttributes, UCode, UStatus,
 };
