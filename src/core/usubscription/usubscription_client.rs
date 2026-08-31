@@ -161,6 +161,9 @@ mod tests {
     };
     use std::sync::Arc;
 
+    // [utest->req~usubscription-subscribe-method_id~1]
+    // [utest->req~usubscription-subscribe-request-signature~1]
+    // [utest->req~usubscription-subscribe-response-signature~1]
     #[tokio::test]
     async fn test_subscribe_invokes_rpc_client() {
         let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
@@ -216,6 +219,9 @@ mod tests {
             .is_ok());
     }
 
+    // [utest->req~usubscription-unsubscribe-method_id~1]
+    // [utest->req~usubscription-unsubscribe-request-signature~1]
+    // [utest->req~usubscription-unsubscribe-response-signature~1]
     #[tokio::test]
     async fn test_unsubscribe_invokes_rpc_client() {
         let topic = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
@@ -261,6 +267,9 @@ mod tests {
         assert!(usubscription_client.unsubscribe(&topic).await.is_ok());
     }
 
+    // [utest->req~usubscription-fetch-subscriptions-method_id~1]
+    // [utest->req~usubscription-fetch-subscriptions-request-signature~1]
+    // [utest->req~usubscription-fetch-subscriptions-response-signature~1]
     #[tokio::test]
     async fn test_fetch_subscriptions_invokes_rpc_client() {
         let topic_filter = UUri::try_from_parts("other", 0xd5a3, 0x01, 0xd3fe).unwrap();
@@ -313,6 +322,9 @@ mod tests {
             .is_ok());
     }
 
+    // [utest->req~usubscription-register-notifications-method_id~1]
+    // [utest->req~usubscription-register-notifications-request-signature~1]
+    // [utest->req~usubscription-register-notifications-response-signature~1]
     #[tokio::test]
     async fn test_register_for_notifications_invokes_rpc_client() {
         let mut rpc_client = MockRpcClient::new();
@@ -353,6 +365,9 @@ mod tests {
             .is_ok());
     }
 
+    // [utest->req~usubscription-unregister-notifications-method_id~1]
+    // [utest->req~usubscription-unregister-notifications-request-signature~1]
+    // [utest->req~usubscription-unregister-notifications-response-signature~1]
     #[tokio::test]
     async fn test_unregister_for_notifications_invokes_rpc_client() {
         let mut rpc_client = MockRpcClient::new();
@@ -393,6 +408,9 @@ mod tests {
             .is_ok());
     }
 
+    // [utest->req~usubscription-reset-method_id~1]
+    // [utest->req~usubscription-reset-request-signature~1]
+    // [utest->req~usubscription-reset-response-signature~1]
     #[tokio::test]
     async fn test_reset_invokes_rpc_client() {
         let mut rpc_client = MockRpcClient::new();

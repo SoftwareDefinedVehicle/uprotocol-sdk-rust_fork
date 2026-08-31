@@ -27,24 +27,24 @@ pub use usubscription_server::{
 };
 mod usubscription_proto;
 
-/// The uEntity (type) identifier of the uSubscription service.
+// [impl->req~usubscription-uentity_id~1]
 pub const USUBSCRIPTION_TYPE_ID: u16 = 0x0000_0000;
 /// The (latest) major version of the uSubscription service.
 pub const USUBSCRIPTION_VERSION_MAJOR: u8 = 0x04;
-/// The resource identifier of uSubscription's _subscribe_ operation.
+// [impl->req~usubscription-subscribe-method_id~1]
 pub const RESOURCE_ID_SUBSCRIBE: u16 = 0x0001;
-/// The resource identifier of uSubscription's _unsubscribe_ operation.
+// [impl->req~usubscription-unsubscribe-method_id~1]
 pub const RESOURCE_ID_UNSUBSCRIBE: u16 = 0x0002;
-/// The resource identifier of uSubscription's _fetch subscriptions_ operation.
+// [impl->req~usubscription-fetch-subscriptions-method_id~1]
 pub const RESOURCE_ID_FETCH_SUBSCRIPTIONS: u16 = 0x0003;
-/// The resource identifier of uSubscription's _register for notifications_ operation.
+// [impl->req~usubscription-register-notifications-method_id~1]
 pub const RESOURCE_ID_REGISTER_FOR_NOTIFICATIONS: u16 = 0x0004;
-/// The resource identifier of uSubscription's _unregister for notifications_ operation.
+// [impl->req~usubscription-unregister-notifications-method_id~1]
 pub const RESOURCE_ID_UNREGISTER_FOR_NOTIFICATIONS: u16 = 0x0005;
-/// The resource identifier of uSubscription's _reset_ operation.
+// [impl->req~usubscription-reset-method_id~1]
 pub const RESOURCE_ID_RESET: u16 = 0x0006;
 
-/// The resource identifier of uSubscription's _subscription change_ messages.
+// [impl->req~usubscription-change-notification-resource~1]
 pub const RESOURCE_ID_SUBSCRIPTION_CHANGE: u16 = 0x8000;
 
 /// Information about a client-topic subscription.

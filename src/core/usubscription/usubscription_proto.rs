@@ -178,13 +178,17 @@ impl TryFrom<&SubscribeRequest> for SubscribeRequestProto {
     }
 }
 
+// [impl->req~usubscription-subscribe-request-signature~1]
 impl TryFrom<&SubscribeRequestProto> for SubscribeRequest {
     type Error = UStatus;
 
     fn try_from(proto: &SubscribeRequestProto) -> Result<Self, Self::Error> {
         Ok(SubscribeRequest {
+            // [impl->dsn~usubscription-subscribe-valid-topic-uuris~1]
             topic: require_topic(proto.topic.clone())?,
+            // [impl->dsn~usubscription-subscription-expiration-datatype~1]
             expiration: protobuf_timestamp_as_chrono_datetime(proto.expiration.as_ref())?,
+            // [impl->dsn~usubscription-sample-period-datatype~1]
             sample_period: proto
                 .sample_period
                 .map(|sp| TimeDelta::milliseconds(sp as i64)),
@@ -242,6 +246,7 @@ impl From<&SubscribeResponse> for SubscribeResponseProto {
     }
 }
 
+// [impl->req~usubscription-subscribe-response-signature~1]
 impl TryFrom<&SubscribeResponseProto> for SubscribeResponse {
     type Error = UStatus;
 
@@ -300,11 +305,13 @@ impl TryFrom<&UnsubscribeRequest> for UnsubscribeRequestProto {
     }
 }
 
+// [impl->req~usubscription-unsubscribe-request-signature~1]
 impl TryFrom<&UnsubscribeRequestProto> for UnsubscribeRequest {
     type Error = UStatus;
 
     fn try_from(proto: &UnsubscribeRequestProto) -> Result<Self, Self::Error> {
         Ok(UnsubscribeRequest {
+            // [impl->dsn~usubscription-unsubscribe-valid-topic-uuris~1]
             topic: require_topic(proto.topic.clone())?,
         })
     }
@@ -360,10 +367,12 @@ impl From<&FetchSubscriptionsRequest> for FetchSubscriptionsRequestProto {
     }
 }
 
+// [impl->req~usubscription-fetch-subscriptions-request-signature~1]
 impl TryFrom<&FetchSubscriptionsRequestProto> for FetchSubscriptionsRequest {
     type Error = UStatus;
 
     fn try_from(value: &FetchSubscriptionsRequestProto) -> Result<Self, Self::Error> {
+        // [impl->dsn~usubscription-fetch-subscriptions-invalid-subscriber-filter~1]
         let subscriber_filter = value
             .subscriber_filter
             .as_ref()
@@ -372,6 +381,8 @@ impl TryFrom<&FetchSubscriptionsRequestProto> for FetchSubscriptionsRequest {
             .map_err(|_| {
                 UStatus::fail_with_code(UCode::InvalidArgument, "invalid subscriber filter")
             })?;
+
+        // [impl->dsn~usubscription-fetch-subscriptions-invalid-topic-filter~1]
         let topic_filter = value
             .topic_filter
             .as_ref()
@@ -439,6 +450,7 @@ impl TryFrom<&FetchSubscriptionsResponse> for FetchSubscriptionsResponseProto {
     }
 }
 
+// [impl->req~usubscription-fetch-subscriptions-response-signature~1]
 impl TryFrom<&FetchSubscriptionsResponseProto> for FetchSubscriptionsResponse {
     type Error = UStatus;
 
@@ -561,6 +573,7 @@ mod tests {
         protobuf_timestamp_as_chrono_datetime(Some(&timestamp))
     }
 
+    // [utest->dsn~usubscription-subscription-expiration-datatype~1]
     #[test]
     fn test_timestamp_conversion_round_trip() {
         let datetime = DateTime::from_timestamp(1_700_000_000, 123_456_789).unwrap();
@@ -569,5 +582,69 @@ mod tests {
         let round_tripped = protobuf_timestamp_as_chrono_datetime(timestamp.as_ref())
             .expect("conversion back to chrono datetime should succeed");
         assert_eq!(round_tripped, Some(datetime));
+    }
+
+    // [utest->dsn~usubscription-fetch-subscriptions-invalid-subscriber-filter~1]
+    #[test]
+    fn test_fetch_subscriptions_request_rejects_invalid_subscriber_filter() {
+        let proto = FetchSubscriptionsRequestProto {
+            subscriber_filter: MessageField::some(UUriProto {
+                // construct an invalid UUri, with a too-large resource ID
+                resource_id: 0xFFFF_FFFF,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = FetchSubscriptionsRequest::try_from(&proto);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().get_code(), UCode::InvalidArgument);
+    }
+
+    // [utest->dsn~usubscription-fetch-subscriptions-invalid-topic-filter~1]
+    #[test]
+    fn test_fetch_subscriptions_request_rejects_invalid_topic_filter() {
+        let proto = FetchSubscriptionsRequestProto {
+            topic_filter: MessageField::some(UUriProto {
+                // construct an invalid UUri, with a too-large resource ID
+                resource_id: 0xFFFF_FFFF,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = FetchSubscriptionsRequest::try_from(&proto);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().get_code(), UCode::InvalidArgument);
+    }
+
+    // [utest->dsn~usubscription-subscribe-valid-topic-uuris~1]
+    #[test]
+    fn test_subscribe_request_rejects_missing_topic() {
+        let proto = SubscribeRequestProto::default();
+        let result = SubscribeRequest::try_from(&proto);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().get_code(), UCode::InvalidArgument);
+    }
+
+    // [utest->dsn~usubscription-unsubscribe-valid-topic-uuris~1]
+    #[test]
+    fn test_unsubscribe_request_rejects_missing_topic() {
+        let proto = UnsubscribeRequestProto::default();
+        let result = UnsubscribeRequest::try_from(&proto);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().get_code(), UCode::InvalidArgument);
+    }
+
+    // [utest->dsn~usubscription-sample-period-datatype~1]
+    #[test]
+    fn test_subscribe_request_preserves_sample_period() {
+        let proto = SubscribeRequestProto {
+            topic: MessageField::some(UUriProto::from(
+                &UUri::try_from_parts("", 0x1234, 1, 0x8000).unwrap(),
+            )),
+            sample_period: Some(500),
+            ..Default::default()
+        };
+        let request = SubscribeRequest::try_from(&proto).unwrap();
+        assert_eq!(request.sample_period, Some(TimeDelta::milliseconds(500)));
     }
 }

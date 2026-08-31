@@ -91,12 +91,14 @@ pub fn extract_usubscription_request(
     })?;
 
     match resource_id {
+        // [impl->req~usubscription-subscribe-request-signature~1]
         RESOURCE_ID_SUBSCRIBE => {
             let request_proto = payload
                 .extract_protobuf::<SubscribeRequestProto>()
                 .map_err(|err| UStatus::fail_with_code(UCode::Internal, err.to_string()))?;
             Ok(SubscribeRequest::try_from(&request_proto).map(USubscriptionRequest::Subscribe)?)
         }
+        // [impl->req~usubscription-unsubscribe-request-signature~1]
         RESOURCE_ID_UNSUBSCRIBE => {
             let request_proto = payload
                 .extract_protobuf::<UnsubscribeRequestProto>()
@@ -104,6 +106,7 @@ pub fn extract_usubscription_request(
             Ok(UnsubscribeRequest::try_from(&request_proto)
                 .map(USubscriptionRequest::Unsubscribe)?)
         }
+        // [impl->req~usubscription-fetch-subscriptions-request-signature~1]
         RESOURCE_ID_FETCH_SUBSCRIPTIONS => {
             let request_proto = payload
                 .extract_protobuf::<FetchSubscriptionsRequestProto>()
@@ -111,12 +114,15 @@ pub fn extract_usubscription_request(
             Ok(FetchSubscriptionsRequest::try_from(&request_proto)
                 .map(USubscriptionRequest::FetchSubscriptions)?)
         }
+        // [impl->req~usubscription-register-notifications-request-signature~1]
         RESOURCE_ID_REGISTER_FOR_NOTIFICATIONS => {
             Ok(USubscriptionRequest::RegisterForNotification(()))
         }
+        // [impl->req~usubscription-unregister-notifications-request-signature~1]
         RESOURCE_ID_UNREGISTER_FOR_NOTIFICATIONS => {
             Ok(USubscriptionRequest::UnregisterForNotification(()))
         }
+        // [impl->req~usubscription-reset-request-signature~1]
         RESOURCE_ID_RESET => Ok(USubscriptionRequest::Reset(())),
         _ => Err(UStatus::fail_with_code(
             UCode::Unimplemented,
@@ -137,11 +143,14 @@ pub fn pack_usubscription_response(
     usubscription_response: USubscriptionResponse,
 ) -> Result<Option<UPayload>, UStatus> {
     match usubscription_response {
+        // [impl->req~usubscription-subscribe-response-signature~1]
         USubscriptionResponse::Subscribe(response) => Ok(Some(
             UPayload::try_from_protobuf(response)
                 .map_err(|err| UStatus::fail_with_code(UCode::Internal, err.to_string()))?,
         )),
+        // [impl->req~usubscription-unsubscribe-response-signature~1]
         USubscriptionResponse::Unsubscribe(_) => Ok(None),
+        // [impl->req~usubscription-fetch-subscriptions-response-signature~1]
         USubscriptionResponse::FetchSubscriptions(response) => {
             let r = FetchSubscriptionsResponseProto::try_from(&response)
                 .map_err(|err| UStatus::fail_with_code(UCode::Internal, err.to_string()))?;
@@ -149,8 +158,11 @@ pub fn pack_usubscription_response(
                 UStatus::fail_with_code(UCode::Internal, err.to_string())
             })?))
         }
+        // [impl->req~usubscription-register-notifications-response-signature~1]
         USubscriptionResponse::RegisterForNotification(_) => Ok(None),
+        // [impl->req~usubscription-unregister-notifications-response-signature~1]
         USubscriptionResponse::UnregisterForNotification(_) => Ok(None),
+        // [impl->req~usubscription-reset-response-signature~1]
         USubscriptionResponse::Reset(_) => Ok(None),
     }
 }
