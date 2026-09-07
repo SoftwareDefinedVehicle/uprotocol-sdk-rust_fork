@@ -63,7 +63,7 @@ pub struct SubscriptionInfo {
 }
 
 impl SubscriptionInfo {
-    /// Creates a new info object.
+    /// Creates a new subscription info object.
     ///
     /// # Arguments
     /// * `topic` - The topic of the subscription.
@@ -144,11 +144,9 @@ impl SubscriptionInfo {
     }
 }
 
-/// A request to subscribe to a topic.
+/// A request to subscribe to a topic (client/subscriber UUri from the message UAttributes envelope).
 #[derive(Clone, Debug, PartialEq)]
 pub struct SubscribeRequest {
-    /// The uEntity that wants to subscribe (taken from the message's source address).
-    // pub subscriber: UUri,
     /// The topic to subscribe to.
     pub topic: UUri,
     /// The point in time at which the subscription expires.
@@ -166,11 +164,9 @@ pub struct SubscribeResponse {
     pub status: SubscriptionStatus,
 }
 
-/// A request to unsubscribe from a topic.
+/// A request to unsubscribe from a topic (client/unsubscriber UUri from the message UAttributes envelope).
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnsubscribeRequest {
-    /// The uEntity that wants to unsubscribe (taken from the message's source address).
-    // pub subscriber: UUri,
     /// The topic to unsubscribe from.
     pub topic: UUri,
 }
@@ -178,8 +174,6 @@ pub struct UnsubscribeRequest {
 /// A request to fetch subscription information.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FetchSubscriptionsRequest {
-    /// The uEntity that is asking for subscription information (taken from the message's source address).
-    // pub client: UUri,
     /// The topic filter to fetch subscription information for.
     pub topic_filter: Option<UUri>,
     /// The subscriber filter to fetch subscription information for.

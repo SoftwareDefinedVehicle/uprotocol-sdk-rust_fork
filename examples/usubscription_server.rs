@@ -57,8 +57,7 @@ impl RequestHandler for MyUSubscriptionService {
     ) -> Result<Option<UPayload>, ServiceInvocationError> {
         // Decode the payload of uSubscription operations into a typed request. Malformed or
         // unsupported requests result in a `ServiceInvocationError`.
-        let request =
-            extract_usubscription_request(resource_id, message_attributes, request_payload)?;
+        let request = extract_usubscription_request(resource_id, request_payload)?;
 
         #[allow(clippy::wildcard_enum_match_arm)]
         match request {

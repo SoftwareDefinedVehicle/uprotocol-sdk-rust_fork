@@ -28,7 +28,7 @@ use crate::{
         FetchSubscriptionsResponse as FetchSubscriptionsResponseProto,
         SubscribeRequest as SubscribeRequestProto, UnsubscribeRequest as UnsubscribeRequestProto,
     },
-    UAttributes, UCode, UStatus,
+    UCode, UStatus,
 };
 
 /// A decoded uSubscription request, tagged by the operation it belongs to.
@@ -83,7 +83,6 @@ pub enum USubscriptionResponse {
 /// the payload is missing, or if it cannot be deserialized into the expected type.
 pub fn extract_usubscription_request(
     resource_id: u16,
-    _message_attributes: &UAttributes,
     request_payload: Option<UPayload>,
 ) -> Result<USubscriptionRequest, UStatus> {
     let payload = request_payload.ok_or_else(|| {
